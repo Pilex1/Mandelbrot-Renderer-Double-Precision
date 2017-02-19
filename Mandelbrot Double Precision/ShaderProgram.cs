@@ -8,13 +8,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Tests {
+namespace Mandelbrot_Double_Precision {
     class ShaderProgram {
 
         public uint vertexShader { get; private set; }
         public uint fragmentShader { get; private set; }
 
-        public uint ID { get; private set; }
+        public uint id { get; private set; }
 
         private Dictionary<string, int> UniformLocations;
 
@@ -40,15 +40,15 @@ namespace Tests {
                 Debug.WriteLine(fragmentlog);
             }
 
-            ID = GL.CreateProgram();
+            id = GL.CreateProgram();
 
-            GL.AttachShader(ID, vertexShader);
-            GL.AttachShader(ID, fragmentShader);
+            GL.AttachShader(id, vertexShader);
+            GL.AttachShader(id, fragmentShader);
 
-            GL.LinkProgram(ID);
-            GL.ValidateProgram(ID);
+            GL.LinkProgram(id);
+            GL.ValidateProgram(id);
 
-            string programlog = GL.GetShaderInfoLog((int)ID);
+            string programlog = GL.GetShaderInfoLog((int)id);
             if (programlog != "") {
                 Debug.WriteLine("Program did not compile successfully:");
                 Debug.WriteLine(programlog);
@@ -58,10 +58,10 @@ namespace Tests {
         }
 
         public void AddUniform(string s) {
-            int uniformLocation = GL.GetUniformLocation(ID, s);
+            int uniformLocation = GL.GetUniformLocation(id, s);
             if (uniformLocation == -1)
                 Debug.WriteLine(String.Format("Uniform name not used or not found: {0}", s));
-            UniformLocations[s] = GL.GetUniformLocation(ID, s);
+            UniformLocations[s] = GL.GetUniformLocation(id, s);
         }
 
         public void SetUniform1b(string s, bool b) {

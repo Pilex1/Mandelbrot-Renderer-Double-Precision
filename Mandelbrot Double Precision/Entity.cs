@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Tests {
+namespace Mandelbrot_Double_Precision {
     class Entity {
         public Model model { get; private set; }
         public Vector2 pos;

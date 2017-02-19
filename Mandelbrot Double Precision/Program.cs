@@ -1,26 +1,59 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Pencil.Gaming;
+﻿using Pencil.Gaming;
 using Pencil.Gaming.Graphics;
 using Pencil.Gaming.MathUtils;
-using System.Diagnostics;
-using System.Collections;
+using System;
+using System.Drawing;
+using System.Threading;
 
-namespace Tests {
-    class Program {
+namespace Mandelbrot_Double_Precision {
 
-        static int width = 1280, height = 720;
+    static class Program {
+
+        public enum FractalsToRender {
+            Mandelbrot, Julia, MandelbrotJulia
+        }
+
+        private static bool view = true;
+
+        // public static int width = 640, height = 360;
+        public static int width = 1280, height = 720;
         static GlfwWindowPtr window;
         internal static ShaderProgram shader;
+        internal static ShaderProgram guishader;
 
         static Fractal mandelbrot, julia;
+
         static Fractal.FractalType activeFractal;
         static CooldownTimer activeFractalTimer;
 
+        static FractalsToRender fractalsToRender;
+        static CooldownTimer fractalsToRenderTimer;
+
+        static CooldownTimer screenshotTimer;
+
+        public static int ScreenshotCount;
+
+        private static bool shouldClose;
+
+        private static Thread consoleThread;
+
+        private static DateTime TimeStart;
+
         static void Main(string[] args) {
+            TimeStart = DateTime.Now;
+            Console.WriteLine("Realtime render / Image sequence render : y / n");
+            while (true) {
+                string input = Console.ReadLine();
+                if (input == "y") {
+                    view = true;
+                    break;
+                } else if (input == "n") {
+                    view = false;
+                    break;
+                }
+            }
+            view = true;
+
             if (!Glfw.Init())
                 return;
 
@@ -28,8 +61,22 @@ namespace Tests {
             Glfw.MakeContextCurrent(window);
             Glfw.SetErrorCallback(OnError);
             Input.Init(window);
+            if (!view) {
+                Glfw.HideWindow(window);
+            }
 
             Init();
+            Update();
+
+            consoleThread = new Thread(new ThreadStart(delegate () {
+                while (true) {
+                    string input = Console.ReadLine();
+                    if (input == "s") {
+                        SetShouldClose(true);
+                    }
+                }
+            }));
+            consoleThread.Start();
 
             while (!Glfw.WindowShouldClose(window))
                 MainLoop();
@@ -37,11 +84,13 @@ namespace Tests {
             Glfw.DestroyWindow(window);
             Glfw.Terminate();
 
+            consoleThread.Abort();
             CleanUp();
         }
 
         private static void CleanUp() {
-            Serialization.Save(mandelbrot, julia, activeFractal);
+            if (view)
+                Serialization.Save(mandelbrot, julia, activeFractal, fractalsToRender, ScreenshotCount);
         }
 
         private static void OnError(GlfwError code, string desc) {
@@ -67,11 +116,18 @@ namespace Tests {
             shader.AddUniform("pos");
             shader.AddUniform("zoom");
 
+            //guishader = new ShaderProgram("Asset/Shaders/Gui.vert", "Asset/Shaders/Gui.frag");
+            //guishader.AddUniform("pos");
+            //guishader.AddUniform("size");
+
             try {
                 Serialization.FractalPair pair = Serialization.Load();
                 mandelbrot = pair.mandelbrot;
                 julia = pair.julia;
                 activeFractal = pair.activeFractal;
+                fractalsToRender = pair.fractalsToRender;
+                //  ScreenshotCount = pair.screenshotCount;
+                ScreenshotCount = 0;
             } catch (Exception) {
                 mandelbrot = Fractal.CreateMandelbrot();
                 julia = Fractal.CreateJulia();
@@ -81,22 +137,57 @@ namespace Tests {
 
             activeFractalTimer = new CooldownTimer(60);
             activeFractalTimer.SetTime(activeFractalTimer.GetCooldown());
+            screenshotTimer = new CooldownTimer(20);
+            fractalsToRenderTimer = new CooldownTimer(20);
+
+            if (!view) {
+                mandelbrot.pos = new Vector2d(-0.129078142625295, 0.98765122402576);
+                mandelbrot.maxIter = 2000;
+                fractalsToRender = FractalsToRender.Mandelbrot;
+                mandelbrot.crosshair = false;
+                mandelbrot.zoom = 4;
+            } else {
+                //Random rand = new Random();
+                //mandelbrot.pos = new Vector2d(rand.NextDouble() * 2 - 1, rand.NextDouble() * 2 - 1);
+                //mandelbrot.zoom = 2;
+            }
+
+            //    mandelbrot.zoom = 1E-10;
         }
 
+
         private static void MainLoop() {
+
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit | ClearBufferMask.StencilBufferBit);
 
             GameTime.Update();
             Glfw.SetWindowTitle(window, "FPS: " + GameTime.FPS);
 
             CooldownTimer.Update();
-            Update();
             Render(mandelbrot);
             Render(julia);
 
-            Glfw.SwapBuffers(window);
+            Update();
+            if (!view) {
+                Animate();
+                SaveScreenshot();
+                Console.WriteLine("Pos: " + mandelbrot.pos + " Zoom: " + mandelbrot.zoom);
+            }
 
             Glfw.PollEvents();
+
+            Glfw.SwapBuffers(window);
+
+            if (shouldClose) {
+                Glfw.SetWindowShouldClose(window, shouldClose);
+            }
+
+        }
+
+        private static void Animate() {
+            mandelbrot.zoom *= 0.95;
+            if (mandelbrot.zoom < 1E-13)
+                Glfw.SetWindowShouldClose(window, true);
         }
 
         private static void Update() {
@@ -104,6 +195,14 @@ namespace Tests {
                 if (activeFractalTimer.Ready()) {
                     activeFractal = activeFractal == Fractal.FractalType.Mandelbrot ? Fractal.FractalType.Julia : Fractal.FractalType.Mandelbrot;
                     activeFractalTimer.Reset();
+                }
+            }
+            if (Input.Keys(Key.B)) {
+                if (fractalsToRenderTimer.Ready()) {
+                    int f = (int)(fractalsToRender) + 1;
+                    f %= 3;
+                    fractalsToRender = (FractalsToRender)f;
+                    fractalsToRenderTimer.Reset();
                 }
             }
 
@@ -158,6 +257,37 @@ namespace Tests {
             if (Input.Keys(Key.Escape)) {
                 Glfw.SetWindowShouldClose(window, true);
             }
+
+            if (Input.Keys(Key.F1)) {
+                if (screenshotTimer.Ready()) {
+                    screenshotTimer.Reset();
+                    SaveScreenshot();
+                }
+            }
+
+
+
+            switch (fractalsToRender) {
+                case FractalsToRender.Mandelbrot:
+                    mandelbrot.quad.pos = Vector2.Zero;
+                    mandelbrot.quad.model.size = new Vector2(1, 1);
+                    julia.quad.model.size = Vector2.Zero;
+                    activeFractal = Fractal.FractalType.Mandelbrot;
+                    break;
+                case FractalsToRender.Julia:
+                    julia.quad.pos = Vector2.Zero;
+                    julia.quad.model.size = new Vector2(1, 1);
+                    mandelbrot.quad.model.size = Vector2.Zero;
+                    activeFractal = Fractal.FractalType.Julia;
+                    break;
+                case FractalsToRender.MandelbrotJulia:
+                    mandelbrot.quad.pos = new Vector2(-0.5f, 0f);
+                    mandelbrot.quad.model.size = new Vector2(0.5f, 1);
+
+                    julia.quad.pos = new Vector2(0.5f, 0f);
+                    julia.quad.model.size = new Vector2(0.5f, 1f);
+                    break;
+            }
         }
 
         private static void HandleKeys(Fractal fractal) {
@@ -187,8 +317,8 @@ namespace Tests {
                 fractal.zoom /= (float)Math.Pow(0.99, GameTime.DeltaTime);
             }
 
-            if (Input.Keys(Key.Y)) fractal.maxIter /= (float)Math.Pow(0.999, GameTime.DeltaTime);
-            if (Input.Keys(Key.H)) fractal.maxIter *= (float)Math.Pow(0.999, GameTime.DeltaTime);
+            if (Input.Keys(Key.Y)) fractal.maxIter /= (float)Math.Pow(0.99, GameTime.DeltaTime);
+            if (Input.Keys(Key.H)) fractal.maxIter *= (float)Math.Pow(0.99, GameTime.DeltaTime);
             if (fractal.maxIter < 1) fractal.maxIter = 1;
 
             if (Input.Keys(Key.T)) {
@@ -202,7 +332,7 @@ namespace Tests {
 
         private static void Render(Fractal fractal) {
             Model model = fractal.quad.model;
-            GL.UseProgram(shader.ID);
+            GL.UseProgram(shader.id);
             GL.BindVertexArray(model.vao.ID);
 
             shader.SetUniform2f("vposoffset", fractal.quad.pos);
@@ -219,7 +349,7 @@ namespace Tests {
             } else {
                 shader.SetUniform3f("cursorClr", new Vector3(1f, 1f, 1f));
             }
-            shader.SetUniform1b("crosshair",fractal.crosshair);
+            shader.SetUniform1b("crosshair", fractal.crosshair);
             shader.SetUniform1i("julia_mode", (int)fractal.mode);
 
             shader.SetUniform1i("fractalType", (int)fractal.fractalType);
@@ -234,7 +364,31 @@ namespace Tests {
             GL.UseProgram(0);
         }
 
+        private static void SaveScreenshot() {
+            string dir = "";
+            dir = TimeStart.ToShortDateString() + "_" + TimeStart.ToShortTimeString();
+            dir = "_" + dir.Replace(' ', '_');
+            dir = dir.Replace(':', '_');
+            dir = dir.Replace('/', '_');
+            GL.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+            byte[] pixels = new byte[3 * width * height];
+            GL.ReadPixels(0, 0, width, height, PixelFormat.Rgb, PixelType.UnsignedByte, pixels);
+            Bitmap bitmap = new Bitmap(width, height);
+            for (int i = 0; i < width; i++) {
+                for (int j = 0; j < height; j++) {
+                    byte r = pixels[3 * (j * width + i)];
+                    byte g = pixels[3 * (j * width + i) + 1];
+                    byte b = pixels[3 * (j * width + i) + 2];
+                    bitmap.SetPixel(i, j, Color.FromArgb(r, g, b));
+                }
+            }
+            Serialization.SaveScreenshot(dir, bitmap);
+            bitmap.Dispose();
+            ScreenshotCount++;
+        }
 
-
+        private static void SetShouldClose(bool b) {
+            shouldClose = b;
+        }
     }
 }

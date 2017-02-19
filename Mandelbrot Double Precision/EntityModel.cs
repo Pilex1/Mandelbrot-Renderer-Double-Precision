@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Tests {
+namespace Mandelbrot_Double_Precision {
     class Model {
 
         public VAO vao;

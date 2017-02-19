@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Tests {
+namespace Mandelbrot_Double_Precision {
     static class GameTime {
         private static Stopwatch Watch = new Stopwatch();
         public static float TotalTime { get; private set; }

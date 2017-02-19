@@ -103,10 +103,10 @@ void main(void) {
 	dvec2 z = fpos;
 	bool line = false;
 	float ch = 0.002;
+	float viewRatio = vsize.x / vsize.y;
 	if ((abs(z.x) < ch || abs(z.y) < ch) && (z.x * z.x + z.y * z.y <= ch)) {
 		line = true;
 	}
-	float viewRatio = vsize.x / vsize.y;
 	z.y /= aspectRatio * viewRatio;
 	double calczoom = zoom;
 	calczoom *= viewRatio;

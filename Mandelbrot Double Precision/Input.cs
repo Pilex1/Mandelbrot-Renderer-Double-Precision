@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Tests {
+namespace Mandelbrot_Double_Precision {
     static class Input {
 
         private static bool[] keys = new bool[1024];
